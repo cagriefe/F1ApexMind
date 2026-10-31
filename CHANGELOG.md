@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.4
+- The web dashboard no longer prints `ConnectionResetError` tracebacks when a browser tab closes or reloads; real server errors go to the log file.
+
 ## 0.9.3
 - Track memory: every finished lap (clean, invalid or untimed) is merged into a per-track file, so calls work from lap 1 in a later race, restart or day. Before, only clean timed laps were saved, so practice with track-limit violations or flashbacks left nothing behind.
 - `apexmind memory` lists or forgets remembered tracks; `--refs FILE` became `--memory DIR`.

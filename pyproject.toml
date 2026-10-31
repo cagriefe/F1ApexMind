@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "apexmind"
-version = "0.9.3"
+version = "0.9.4"
 description = "A real-time AI race engineer for F1 games: listens to UDP telemetry and coaches braking and throttle corner by corner."
 readme = "README.md"
 requires-python = ">=3.10"

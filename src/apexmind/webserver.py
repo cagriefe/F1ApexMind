@@ -11,14 +11,18 @@ from __future__ import annotations
 import collections
 import io
 import json
+import logging
 import mimetypes
 import queue
+import sys
 import threading
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import __version__
+
+_LOG = logging.getLogger("apexmind")
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 WEBUI_DIR = PACKAGE_DIR / "webui"
@@ -139,9 +143,21 @@ def _make_handler(hub: LiveHub):
     return Handler
 
 
+class _QuietServer(ThreadingHTTPServer):
+    """A browser closing a tab or dropping a connection is normal: no traceback in the terminal."""
+
+    daemon_threads = True
+
+    def handle_error(self, request, client_address) -> None:
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionError, TimeoutError, BrokenPipeError)):
+            _LOG.debug("web client %s went away: %s", client_address, exc)
+            return
+        _LOG.warning("web request from %s failed", client_address, exc_info=True)
+
+
 def start_server(hub: LiveHub, host: str, port: int) -> ThreadingHTTPServer:
     """Start serving in a background thread. Raises OSError if the port is busy."""
-    server = ThreadingHTTPServer((host, port), _make_handler(hub))
-    server.daemon_threads = True
+    server = _QuietServer((host, port), _make_handler(hub))
     threading.Thread(target=server.serve_forever, name="apexmind-web", daemon=True).start()
     return server

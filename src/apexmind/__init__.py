@@ -2,4 +2,4 @@
 # Copyright (C) ApexMind contributors
 """ApexMind — a real-time AI race engineer for F1 games."""
 
-__version__ = "0.9.3"
+__version__ = "0.9.4"
