@@ -427,7 +427,8 @@ new ResizeObserver(() => state.report && drawChart()).observe(document.body);
 
 const GROUPS = [
   ["all", "All", () => true],
-  ["calls", "Calls", (k) => k.startsWith("call_") && !["call_limits", "call_traction"].includes(k)],
+  ["calls", "Calls", (k) => k.startsWith("call_") && !["call_limits", "call_traction", "call_skipped"].includes(k)],
+  ["skipped", "Skipped calls", (k) => k === "call_skipped"],
   ["lock", "Lock-ups", (k) => k === "lockup"],
   ["limits", "Track limits", (k) => ["wide", "lap_invalid", "call_limits"].includes(k)],
   ["slides", "Slides", (k) => k.startsWith("spin") || ["slide", "recover", "call_traction", "throttle"].includes(k)],

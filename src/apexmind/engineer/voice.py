@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) ApexMind contributors
-"""macOS ses motoru.
+"""macOS audio engine.
 
 Design rules:
   - **Beeps never enter the speech queue.** A separate priority worker plays them instantly with
@@ -28,11 +28,12 @@ import tempfile
 import threading
 import time
 import wave
+from collections.abc import Callable
 
 _LOG = logging.getLogger(__name__)
 
 # An English voice is preferred (installed on every macOS); override with --voice.
-_PREFERRED = ("Samantha", "Daniel", "Karen", "Moira", "Nicky", "Tessa", "Ava", "Serena", "Allison", "Yelda")
+_PREFERRED = ("Samantha", "Daniel", "Karen", "Moira", "Nicky", "Tessa", "Ava", "Serena", "Allison")
 
 
 def _has(cmd: str) -> bool:
@@ -115,7 +116,7 @@ def _beep_path(
             os.unlink(tmp)
         except OSError:
             pass
-        _LOG.debug("bip dosyasi uretilemedi: %s", kind, exc_info=True)
+        _LOG.debug("could not create beep file: %s", kind, exc_info=True)
         return None
     return path
 
@@ -159,6 +160,9 @@ class Voice:
         self._render_thread: threading.Thread | None = None
         self.phrases_ready = threading.Event()
         self.measured_latency: float | None = None
+        self._clip_procs: list[subprocess.Popen] = []   # call clips currently playing
+        self.dropped_calls = 0
+        self.on_call_dropped: Callable[[str, str], None] | None = None   # (text, reason)
 
         self._speech_thread: threading.Thread | None = None
         self._cue_thread: threading.Thread | None = None
@@ -188,7 +192,7 @@ class Voice:
             self._cue_thread.start()
             self._phrase_thread.start()
 
-    # ----- telsiz metni -----
+    # ----- radio speech -----
 
     def speak(self, text: str, *, urgent: bool = False, max_age: float = 2.5) -> None:
         if not self.enabled:
@@ -286,7 +290,7 @@ class Voice:
                     )
                     os.replace(tmp, path)
                 except Exception:
-                    _LOG.debug("klip uretilemedi: %s", text, exc_info=True)
+                    _LOG.debug("could not render clip: %s", text, exc_info=True)
                     try:
                         os.unlink(tmp)
                     except OSError:
@@ -356,7 +360,9 @@ class Voice:
                 self._phrase_q.put_nowait(item)  # type: ignore[arg-type]
             except queue.Full:
                 try:
-                    self._phrase_q.get_nowait()
+                    old = self._phrase_q.get_nowait()
+                    if old is not None:
+                        self._dropped(old[1], "the call queue was full")  # type: ignore[index]
                 except queue.Empty:
                     pass
                 try:
@@ -376,19 +382,40 @@ class Voice:
                 return
             queued, text, max_age = item  # type: ignore[misc]
             if time.monotonic() - queued > max_age:
-                _LOG.debug("stale call dropped: %s", text)
+                self._dropped(text, "it was queued too long to be useful")
                 continue
             entry = self._phrase_files.get(text)
             if entry is None:
                 continue
-            try:
-                subprocess.run(
-                    ["afplay", entry[0]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5
-                )
-            except Exception:
-                _LOG.debug("afplay call error", exc_info=True)
+            self._play_clip(entry[0], text)
 
-    # ----- bip sinyalleri -----
+    def _dropped(self, text: str, reason: str) -> None:
+        self.dropped_calls += 1
+        _LOG.warning("call dropped: %s (%s)", text, reason)
+        if self.on_call_dropped:
+            self.on_call_dropped(text, reason)
+
+    def _play_clip(self, path: str, text: str) -> None:
+        """Start a call clip without waiting for it: clips never queue behind each other.
+
+        The newest call wins: a clip that is still playing is cut (two overlapping numbers are
+        unintelligible), but the script spacing makes that rare.
+        """
+        try:
+            proc = subprocess.Popen(["afplay", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            self._dropped(text, "afplay could not be started")
+            return
+        with self._lock:
+            for old in self._clip_procs:
+                if old.poll() is None:
+                    try:
+                        old.terminate()
+                    except OSError:
+                        pass
+            self._clip_procs = [proc]
+
+    # ----- beep cues -----
 
     def cue_brake(self) -> None:
         """Double low beep: BRAKE point."""
@@ -405,7 +432,7 @@ class Voice:
     def _enqueue_cue(self, kind: str) -> None:
         if not self.enabled:
             return
-        _LOG.debug("cue kuyruga alindi: %s", kind)
+        _LOG.debug("cue queued: %s", kind)
         if kind == "spin":
             # Spin must not be stuck behind pending brake/throttle beeps.
             while True:
@@ -496,7 +523,7 @@ class Voice:
                 return
 
             path = self._cue_files.get(kind)
-            _LOG.debug("cue caliniyor: %s (%s)", kind, path)
+            _LOG.debug("cue playing: %s (%s)", kind, path)
             if path and _has("afplay"):
                 try:
                     result = subprocess.run(
@@ -507,7 +534,7 @@ class Voice:
                     )
                     if result.returncode == 0:
                         continue
-                    _LOG.debug("afplay basarisiz: returncode=%s", result.returncode)
+                    _LOG.debug("afplay failed: returncode=%s", result.returncode)
                 except Exception:
                     _LOG.debug("afplay error", exc_info=True)
             self._bell()
@@ -525,12 +552,12 @@ class Voice:
     def close(self) -> None:
         self._stop.set()
         with self._lock:
-            proc = self._proc
-            if proc is not None and proc.poll() is None:
-                try:
-                    proc.terminate()
-                except OSError:
-                    pass
+            for proc in [self._proc, *self._clip_procs]:
+                if proc is not None and proc.poll() is None:
+                    try:
+                        proc.terminate()
+                    except OSError:
+                        pass
         for q in (self._speech_q, self._cue_q, self._phrase_q):
             try:
                 q.put_nowait(None)

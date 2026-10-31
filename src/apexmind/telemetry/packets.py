@@ -2,7 +2,7 @@
 # Copyright (C) ApexMind contributors
 """Decoding of the UDP packet types the coach needs.
 
-Desteklenen paketler:
+Supported packets:
   - Motion (id=0)
   - Session (id=1)        -> track length / track id
   - Lap Data (id=2)       -> lap number, lap distance, lap time
@@ -126,7 +126,7 @@ class LapData:
     last_lap_time_ms: int = 0
     car_position: int = 0
     pit_status: int = 0          # 0=none, 1=pitting, 2=in pit area
-    driver_status: int = 4       # 4=pistte
+    driver_status: int = 4       # 4=on track
     current_lap_invalid: bool = False
     sector: int = 0              # 0=S1, 1=S2, 2=S3
     total_warnings: int = 0
@@ -208,8 +208,8 @@ def parse_car_telemetry(fmt: int, player_index: int, payload: bytes | memoryview
     """Decode the player car's telemetry slice from the packet."""
     stride = TELEMETRY_STRIDES.get(fmt)
     if stride is None:
-        raise ValueError(f"telemetri stride tanimsiz: format {fmt}")
-    off = _player_offset(fmt, player_index, stride, len(payload), _TEL_HEAD.size, "telemetri")
+        raise ValueError(f"no telemetry stride defined for format {fmt}")
+    off = _player_offset(fmt, player_index, stride, len(payload), _TEL_HEAD.size, "telemetry")
     f = _TEL_HEAD.unpack_from(payload, off)
     tel = CarTelemetry(
         speed_kmh=f[0],
@@ -236,7 +236,7 @@ def parse_motion(fmt: int, player_index: int, payload: bytes | memoryview) -> Ca
     """Decode the player car's motion slice from the packet."""
     stride = MOTION_STRIDES.get(fmt)
     if stride is None:
-        raise ValueError(f"motion stride tanimsiz: format {fmt}")
+        raise ValueError(f"no motion stride defined for format {fmt}")
 
     if fmt == 2026:
         off = _player_offset(fmt, player_index, stride, len(payload), _MOTION_2026.size, "motion")
@@ -268,7 +268,7 @@ def parse_lap_data(fmt: int, player_index: int, payload: bytes | memoryview) -> 
     """Decode the player's lap info (lap distance, lap number, time)."""
     stride = LAP_STRIDES.get(fmt)
     if stride is None:
-        raise ValueError(f"lap data stride tanimsiz: format {fmt}")
+        raise ValueError(f"no lap data stride defined for format {fmt}")
 
     if fmt == 2022:
         # 2022 LapData: lapDistance offset 12, currentLapNum offset 25
@@ -316,7 +316,7 @@ def parse_lap_data(fmt: int, player_index: int, payload: bytes | memoryview) -> 
 def parse_motion_ex(fmt: int, payload: bytes | memoryview) -> MotionEx:
     """Extra player-only motion data: wheel speed / slip ratio."""
     if fmt not in _MOTION_EX_FORMATS:
-        raise ValueError(f"motion_ex desteklenmiyor: format {fmt}")
+        raise ValueError(f"motion_ex is not supported for format {fmt}")
     if len(payload) < _MOTION_EX.size:
         raise ValueError(f"motion_ex payload too short: {len(payload)} < {_MOTION_EX.size}")
     f = _MOTION_EX.unpack_from(payload, 0)
@@ -327,7 +327,7 @@ def parse_car_damage(fmt: int, player_index: int, payload: bytes | memoryview) -
     """The player's tyre wear and component damage."""
     stride = DAMAGE_STRIDES.get(fmt)
     if stride is None:
-        raise ValueError(f"damage stride tanimsiz: format {fmt}")
+        raise ValueError(f"no damage stride defined for format {fmt}")
     off = _player_offset(fmt, player_index, stride, len(payload), stride, "damage")
     wear = struct.unpack_from("<4f", payload, off)
     tyres_damage = tuple(payload[off + 16 : off + 20])

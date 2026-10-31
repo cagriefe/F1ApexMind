@@ -42,7 +42,7 @@ Open `localhost:8765` in a browser for the web dashboard (see below). Stop with 
 | `Limits` | You went off track here before; stay inside |
 | `Front left locked!` | Wheel lock-up under braking |
 
-The word is spoken only on the first call of each phase, numbers follow. Calls are timed by speed so each one ends just before its point, and they are spaced so they never overlap. If a call cannot be said on time it is skipped rather than said late.
+The word is spoken only on the first call of each phase, numbers follow. Calls are timed by speed so each one ends just before its point, and they are spaced so they never overlap. If a call cannot be said on time it is skipped rather than said late, and the console tells you which one and why (`call not spoken: ... (reason)`), so gaps are never silent. While calls are on, the long after-the-fact sentences (`Braking 24 meters LATE`, `Apex ...`) stay text-only so they never talk over a call.
 
 ## Web dashboard
 

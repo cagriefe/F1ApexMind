@@ -45,8 +45,8 @@ class UnknownFormat(Exception):
     def __init__(self, fmt: int):
         supported = ", ".join(str(f) for f in SUPPORTED_FORMATS)
         super().__init__(
-            f"bilinmeyen packet format: {fmt} (desteklenen: {supported}). "
-            "Oyunda UDP Format ayarini 2025/2026 yap."
+            f"unknown packet format: {fmt} (supported: {supported}). "
+            "Set the in-game UDP Format to 2025 or 2026."
         )
 
 
@@ -65,7 +65,7 @@ def parse_header(buf: bytes | bytearray | memoryview) -> tuple[PacketHeader, int
     if fmt == 2022:
         s = _HEADER_2022
         if len(buf) < s.size:
-            raise ValueError(f"header eksik: {len(buf)} < {s.size}")
+            raise ValueError(f"header too short: {len(buf)} < {s.size}")
         f = s.unpack_from(buf, 0)
         h = PacketHeader(
             format=fmt,
@@ -84,7 +84,7 @@ def parse_header(buf: bytes | bytearray | memoryview) -> tuple[PacketHeader, int
     else:
         s = _HEADER_2023_PLUS
         if len(buf) < s.size:
-            raise ValueError(f"header eksik: {len(buf)} < {s.size}")
+            raise ValueError(f"header too short: {len(buf)} < {s.size}")
         f = s.unpack_from(buf, 0)
         h = PacketHeader(
             format=fmt,

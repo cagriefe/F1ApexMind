@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) ApexMind contributors
-"""Sentetik F1 25 UDP paketleri (format 2025)."""
+"""Synthetic F1 25 UDP packets (format 2025)."""
 
 from __future__ import annotations
 

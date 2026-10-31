@@ -58,6 +58,9 @@ _RAW_KINDS = frozenset({"debrief", "lap_invalid", "limits", "wide", "delta", "lo
                         "tyre_wear", "damage"})
 # Urgent kinds that interrupt speech and go out immediately (short max_age: never spoken if late).
 _URGENT_KINDS = frozenset({"spin", "lockup", "wide", "lap_invalid"})
+# With pedal calls on, the after-the-fact sentences stay text-only (console, web, recording): they are
+# long and would talk over, or right behind, the calls the driver needs to hear.
+_TEXT_ONLY_WITH_CALLS = frozenset({"brake", "apex", "throttle"})
 
 
 def _schedule(delay_s: float, fn) -> None:
@@ -363,6 +366,8 @@ def _cmd_listen(args: argparse.Namespace) -> None:
                 voice.cue_spin()
         if recorder is not None:
             recorder.event(f"{kind}@{an.lap_distance:.0f}" if an.lap_distance is not None else kind)
+        if args.calls == "on" and kind in _TEXT_ONLY_WITH_CALLS:
+            return
         if is_call:
             # Timed call: the ready clip plays instantly; if late it is never spoken.
             voice.call(text)
@@ -426,6 +431,14 @@ def _cmd_listen(args: argparse.Namespace) -> None:
         scheduler=_schedule,
     )
     an.on_commit = save_refs
+
+    def report_gap(text: str, reason: str) -> None:
+        print(f"⚠️ call not spoken: '{text}' ({reason})", flush=True)
+        if recorder is not None:
+            recorder.event(f"skip:{text}:{reason}")
+
+    an.on_skip = report_gap
+    voice.on_call_dropped = report_gap
     if recorder is not None:
         an.trace = lambda k, info: recorder.event(f"{k}:{info}")
     if args.calls == "on" and voice.enabled:
@@ -796,7 +809,8 @@ def _cmd_listen(args: argparse.Namespace) -> None:
         print(
             f"   packets: {lst.stats['received']} | errors: {lst.stats['errors']} | "
             f"processed: {st.frames} | corners: {len(an.zones)} | "
-            f"warnings: {advice_count} | beeps: {an.stats.cues + spin_cue_count}",
+            f"warnings: {advice_count} | beeps: {an.stats.cues + spin_cue_count} | "
+            f"calls not spoken: {an.stats.skipped + voice.dropped_calls}",
             flush=True,
         )
         _LOG.info(

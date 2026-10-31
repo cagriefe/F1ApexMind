@@ -65,6 +65,15 @@ class GasCallsFollowState(unittest.TestCase):
     def gas_calls(ev, lap):
         return [e[0] for e in ev if e[1] == lap and e[0] in ("call_gas", "call_full")]
 
+    def test_a_call_that_cannot_be_said_is_reported_with_its_reason(self):
+        an = Analyzer(lambda k, t: None, learn_n=1, cooldown_s=0, calls=True)
+        skipped = []
+        an.on_skip = lambda text, reason: skipped.append((text, reason))
+        drive(an, laps=5, hz=60, steer_extra={4: 0.8})
+        self.assertTrue(skipped, "a gap in the script must never be silent")
+        self.assertTrue(all("steering" in reason for _t, reason in skipped), skipped)
+        self.assertEqual(an.stats.skipped, len(skipped))
+
     def test_no_gas_up_calls_while_steering_is_still_wound_up(self):
         an = Analyzer(lambda k, t: None, learn_n=1, cooldown_s=0, calls=True)
         ev = drive(an, laps=5, hz=60, steer_extra={4: 0.8})

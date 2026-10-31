@@ -155,7 +155,7 @@ def build_report(source: str | bytes, *, max_events: int = 4000, bin_m: float = 
         lp = lap_idx.get(e.lap)
         if lp is None:
             continue
-        if e.kind.startswith("call_") and e.kind not in ("call_limits", "call_traction"):
+        if e.kind.startswith("call_") and e.kind not in ("call_limits", "call_traction", "call_skipped"):
             lp["calls"] += 1
         elif e.kind == "lockup":
             lp["lockups"] += 1

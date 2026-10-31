@@ -40,12 +40,12 @@ class SpinTest(unittest.TestCase):
         # the car goes towards +x but more than half of its speed is along +z (RIGHT) -> spin
         t = 0.0
         m = mot(vx=20.0, vz=15.0, fx=(1.0, 0.0), right=(0.0, 1.0))
-        # hafif kays? 0.6-1/60 ~. (0.6/25 = 0.6-abort) confirm_frames = 10
+        # ten frames of this slide confirm the spin
         t = self.run_frames(t, tel(90, throttle=1.0), m, n=10)
         kinds = [k for k, _ in self.msgs]
         self.assertIn("spin", kinds)
         txt = next(x for k, x in self.msgs if k == "spin")
-        self.assertIn("RIGHT", txt)          # lateral >0 -> sag
+        self.assertIn("RIGHT", txt)          # lateral > 0 -> steer right
         # if the driver gives too much throttle while spinning, warn (said on the previous frame,
         # reset now so the "once" behaviour can be tested independently)
         self.msgs.clear()

@@ -6,7 +6,7 @@ lateral = projection of the car's real velocity onto its own 'right' direction (
   > 0: velocity points right -> nose is left -> "steer RIGHT"
   < 0: velocity points left -> nose is right -> "steer LEFT"
 ratio = |lateral| / speed
-  0.30+ belirgin kayma, 0.45+ spin
+  0.30+ clear slide, 0.45+ spin
 
 Confirmation / recovery use seconds instead of frame counts, so the reaction time is
 the same at 20 Hz and at 60 Hz.
@@ -101,12 +101,12 @@ class SpinCoach:
                     "throttle",
                     f"Too much throttle — hold about {self.throttle_hint}% until it grips.",
                 )
-            # 2) belirgin kayma
+            # 2) clear slide
             elif ratio >= self.ratio_slide and speed_ms > 12.0 and self._gate("slide"):
                 self.speak("slide", "Rear's stepping out — smooth hands!")
             return
 
-        # spin modu
+        # spin mode
         self._during_spin(t)
         if ratio < self.ratio_recover:
             self.recover += dt

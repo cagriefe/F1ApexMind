@@ -201,6 +201,7 @@ class AnalyzerStats:
     events: int = 0
     cues: int = 0
     calls: int = 0
+    skipped: int = 0
 
 
 class Analyzer:
@@ -295,6 +296,8 @@ class Analyzer:
         self.slide_block = 0.18      # at this slide, "Easy" replaces the throttle-increase calls
         self.rec: dict | None = None
         self.on_commit: Callable[[], None] | None = None   # reference changed (to save it)
+        self.on_skip: Callable[[str, str], None] | None = None   # a scripted call was skipped: (text, reason)
+        self._block_reason: dict[tuple[int, str], str] = {}
         self._epoch = 0
         self._prev: tuple[float | None, float, float, float] | None = None
         self._pf: tuple[float | None, float, float, float] | None = None
@@ -361,7 +364,7 @@ class Analyzer:
         self.cue_brake = cb_brake
         self.cue_throttle = cb_throttle
 
-    # ----- ana girdi -----
+    # ----- main entry points -----
 
     def on_frame(
         self,
@@ -923,16 +926,19 @@ class Analyzer:
                         # Passed and the window ran out: skip it this lap. Only when the car is really past
                         # the target in this lap's coordinates: across the start/finish line (or half a lap
                         # away) the signed distance wraps around and merely looks "behind".
-                        if self.lap_distance > target:
-                            self._cue_gate(key, i)
+                        if self.lap_distance > target and self._cue_gate(key, i):
+                            self._report_skip(text, self._block_reason.pop((i, key), "its moment passed"))
                         continue
                     if ahead > lead:
                         continue
                     if not self._throttle_cue_allowed(z):
+                        self._block_reason[(i, key)] = "the brake point of the corner was not reached"
                         continue
                     if sref is not None and abs(t.steer) > sref + self.steer_margin:
-                        continue                         # steering still more open than the reference: wait
+                        self._block_reason[(i, key)] = "steering still more open than the reference"
+                        continue                         # wait for the steering to unwind
                     if self.rear_slip >= 0.18:
+                        self._block_reason[(i, key)] = "wheelspin"
                         continue                         # wheelspin: do not call a throttle increase
                 else:
                     if ahead < speed_ms * 0.15 or ahead > lead + horizon:
@@ -951,8 +957,12 @@ class Analyzer:
         order = int(key.split("_")[1]) if key.split("_")[1].isdigit() else None
         if order is not None:
             self._call_done[zid] = max(self._call_done.get(zid, -1), order)
+            script = self._zone_calls_script(self.zones[zid])
             for earlier in range(order):                 # skip earlier ones this lap (keep the order intact)
-                self._cue_gate(f"call_{earlier}", zid)
+                if self._cue_gate(f"call_{earlier}", zid) and earlier < len(script):
+                    gone = _ahead_signed(script[earlier][1], self.lap_distance, self.track_length)
+                    if -300.0 < gone <= 0.0:             # passed in this corner, not a lap-start artefact
+                        self._report_skip(script[earlier][2], "it was too late to say it before its point")
 
         def fire() -> None:
             if kind in self._GAS_KINDS and self.slide_ratio >= self.slide_block:
@@ -969,6 +979,12 @@ class Analyzer:
             self._schedule((ahead - lead) / speed_ms, fire)
         else:
             fire()
+
+    def _report_skip(self, text: str, reason: str) -> None:
+        """A scripted call was not spoken: say why (console and recording), so gaps are never silent."""
+        self.stats.skipped += 1
+        if self.on_skip:
+            self.on_skip(text, reason)
 
     def _clear_pending(self) -> None:
         self.pending_turnin = None

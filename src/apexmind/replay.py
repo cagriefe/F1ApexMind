@@ -104,6 +104,8 @@ def replay_rows(
         return lambda: events.append(Event(cur["t"], cur["lap"], cur["dist"], kind, ""))
 
     an.set_cues(cue("cue_brake"), None if calls else cue("cue_throttle"))
+    an.on_skip = lambda text, reason: events.append(Event(cur["t"], cur["lap"], cur["dist"], "call_skipped",
+                                                           f"{text} ({reason})"))
 
     an.limits = limits  # type: ignore[attr-defined]
     # virtual clock + timer: scheduled calls fire between frames at the interpolated distance, like live

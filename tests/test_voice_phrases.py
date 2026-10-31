@@ -45,6 +45,7 @@ if quiet:
     sys.exit(0)
 with open(os.environ["FAKE_LOG"], "a") as f:
     f.write(f"{{time.monotonic():.4f}} {{os.path.basename(path)}}\\n")
+time.sleep(float(os.environ.get("FAKE_PLAY", "0")))
 """
 
 
@@ -95,6 +96,42 @@ class PhraseTests(unittest.TestCase):
         v._phrase_q.put_nowait((time.monotonic() - 5.0, "Full", 0.6))   # queued 5 s ago
         time.sleep(0.8)
         self.assertFalse(os.path.exists(self.log))
+
+    def log_lines(self, n, timeout=2.0):
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            if os.path.exists(self.log):
+                lines = Path(self.log).read_text(encoding="utf-8").splitlines()
+                if len(lines) >= n:
+                    return lines
+            time.sleep(0.01)
+        return Path(self.log).read_text(encoding="utf-8").splitlines() if os.path.exists(self.log) else []
+
+    def test_clips_never_queue_behind_each_other(self):
+        # A call used to wait for the previous clip to finish and was silently dropped if it waited too long.
+        with mock.patch.dict(os.environ, {"FAKE_PLAY": "0.7"}):
+            v = Voice(enabled=True, name="auto", rate=333)
+            self.addCleanup(v.close)
+            v.prepare_phrases(["Brake 80", "Full"], background=False)
+            v.call("Brake 80")
+            time.sleep(0.2)
+            v.call("Full")
+            lines = self.log_lines(2)
+            self.assertEqual(len(lines), 2, lines)
+            starts = [float(line.split()[0]) for line in lines]
+            self.assertLess(starts[1] - starts[0], 0.45)      # serial playback would take >= 0.7 s
+            self.assertEqual(v.dropped_calls, 0)
+
+    def test_dropped_call_is_reported_not_silent(self):
+        v = Voice(enabled=True, name="auto", rate=333)
+        self.addCleanup(v.close)
+        v.prepare_phrases(["Full"], background=False)
+        seen = []
+        v.on_call_dropped = lambda text, reason: seen.append((text, reason))
+        v._phrase_q.put_nowait((time.monotonic() - 5.0, "Full", 0.6))
+        time.sleep(0.8)
+        self.assertEqual([s[0] for s in seen], ["Full"])
+        self.assertEqual(v.dropped_calls, 1)
 
     def test_analyzer_uses_real_clip_durations_for_lead(self):
         v = Voice(enabled=True, name="auto", rate=333)
