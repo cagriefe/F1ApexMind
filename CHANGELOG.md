@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.2
+- A flashback no longer wipes the corners learned so far (it used to, so drivers who flash back after every mistake never got a call).
+- Calls start after one reference lap instead of two.
+- Pauses, teleports and flashbacks no longer produce bursts of `call not spoken` reports.
+- The same call is never spoken twice within a second.
+
 ## 0.9.1
 - Pedal calls are never silently lost: clips no longer queue behind each other, and every call that cannot be spoken is reported with its reason (`call not spoken: ...`).
 - After-the-fact sentences stay text-only while pedal calls are on.

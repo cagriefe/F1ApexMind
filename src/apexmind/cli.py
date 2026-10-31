@@ -476,13 +476,16 @@ def _cmd_listen(args: argparse.Namespace) -> None:
 
     st = _State()
 
-    def reset_learning(reason: str) -> None:
-        an.reset()
-        an.set_track_length(st.session.track_length if st.session else None)
-        load_refs()
+    def reset_learning(reason: str, keep_corners: bool = False) -> None:
+        if keep_corners:
+            an.rewind()                    # flashback: the corners you learned are still there
+        else:
+            an.reset()
+            an.set_track_length(st.session.track_length if st.session else None)
+            load_refs()
+            limits.reset()
         spin.reset()
         debrief.reset()
-        limits.reset()
         lockup.reset()
         traction.reset()
         st.tel = st.motion = st.lap = st.mex = None
@@ -542,7 +545,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
         elif code == "SEND":
             print("🏁 session ended", flush=True)
         elif code == "FLBK":
-            reset_learning("⏪ flashback — personal baseline reset")
+            reset_learning("⏪ flashback — corner knowledge kept", keep_corners=True)
         elif code == "CHQF":
             print("🏁 chequered flag", flush=True)
 

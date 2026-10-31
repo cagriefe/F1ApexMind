@@ -246,7 +246,7 @@ class Analyzer:
         scheduler: Callable[[float, Callable[[], None]], None] | None = None,
         sched_horizon_s: float = 0.6,
         # a corner must be confirmed by at least this many laps before calls (event/spin corner noise)
-        call_min_laps: int = 2,
+        call_min_laps: int = 1,
         # throttle/full calls are state-triggered: steering may be this much more open than the reference
         steer_margin: float = 0.12,
         gas_window_after_m: float = 70.0,
@@ -298,6 +298,9 @@ class Analyzer:
         self.on_commit: Callable[[], None] | None = None   # reference changed (to save it)
         self.on_skip: Callable[[str, str], None] | None = None   # a scripted call was skipped: (text, reason)
         self._block_reason: dict[tuple[int, str], str] = {}
+        self._jump_frames = 0            # frames left in which the position is not trustworthy
+        self._cc_prev_dist: float | None = None
+        self._last_fired: tuple[str, float] | None = None
         self._epoch = 0
         self._prev: tuple[float | None, float, float, float] | None = None
         self._pf: tuple[float | None, float, float, float] | None = None
@@ -355,6 +358,24 @@ class Analyzer:
         self._prev = self._pf = None
         self.rec = None
         self._call_done.clear()
+
+    def rewind(self) -> None:
+        """The car jumped back (flashback / restart): keep what was learned about the corners.
+
+        Only the in-progress state is dropped. Wiping the corners here meant that a driver who flashes
+        back after every mistake never got a single call: the lap never completed with its corners intact.
+        """
+        self.open = None
+        self.rec = None
+        self.thr_prof = None
+        self._clear_pending()
+        self.cue_last.clear()
+        self.cued_this_lap.clear()
+        self._call_done.clear()
+        self._block_reason.clear()
+        self._prev = self._pf = None
+        self._jump_frames = 3
+        self._epoch += 1                                  # scheduled calls of the old position are void
 
     def set_track_length(self, length: float | None) -> None:
         self.track_length = float(length) if length and length > 0 else None
@@ -904,6 +925,12 @@ class Analyzer:
         if not self._use_lap_mode() or self.lap_distance is None:
             return
         speed_ms = math.hypot(m.vx, m.vz)
+        if self._cc_prev_dist is not None and self.track_length:
+            if abs(_signed_delta(self.lap_distance, self._cc_prev_dist, self.track_length)) > 150.0:
+                self._jump_frames = 3                      # pause, teleport or flashback: not real driving
+        self._cc_prev_dist = self.lap_distance
+        if self._jump_frames:
+            self._jump_frames -= 1
         if speed_ms < 8.0:
             return
         horizon = speed_ms * self.sched_horizon_s if self.scheduler else 0.0
@@ -970,6 +997,10 @@ class Analyzer:
                 self.stats.calls += 1
                 self.speak("call_easy", "Easy")
                 return
+            last = self._last_fired
+            if last is not None and last[0] == text and 0.0 <= self.sim_time - last[1] < 1.0:
+                return                                     # the same call twice within a second: a duplicate
+            self._last_fired = (text, self.sim_time)
             self.stats.calls += 1
             if self.trace:
                 self.trace(key, f"z{zid} {text}")
@@ -982,6 +1013,8 @@ class Analyzer:
 
     def _report_skip(self, text: str, reason: str) -> None:
         """A scripted call was not spoken: say why (console and recording), so gaps are never silent."""
+        if self._jump_frames:
+            return                                         # the position jumped: nothing was really missed
         self.stats.skipped += 1
         if self.on_skip:
             self.on_skip(text, reason)

@@ -51,9 +51,9 @@ class SpokenCallsSimulation(unittest.TestCase):
 
     def test_staged_script_brake_ease_gas_full(self):
         ev = drive(make(calls=True), laps=4, hz=20, depth=0.90, hold=0.60)
-        # Verification: the first 2 laps are learning; calls start from lap 3
-        self.assertEqual(self.lap_calls(ev, 2), [])
-        for lap in (3, 4):
+        # Lap 1 is learning; calls start as soon as one reference lap exists (lap 2)
+        self.assertEqual(self.lap_calls(ev, 1), [])
+        for lap in (2, 3, 4):
             calls = self.lap_calls(ev, lap)
             kinds = [k for k, _ in calls]
             self.assertEqual(calls[0], ("call_brake", "Brake 90"))
@@ -154,10 +154,11 @@ class SpokenCallsSimulation(unittest.TestCase):
         self.assertNotIn("call_gas", kinds)
         self.assertIn("call_brake", kinds)    # brake calls are unaffected
 
-    def test_single_pass_zones_stay_silent(self):
+    def test_calls_start_after_one_reference_lap(self):
         an = make(calls=True)
-        ev = drive(an, laps=2, hz=20)         # only 1 reference lap: no calls
-        self.assertFalse([e for e in ev if e[0].startswith("call_")])
+        ev = drive(an, laps=2, hz=20)
+        self.assertEqual(self.lap_calls(ev, 1), [])        # nothing is known yet in lap 1
+        self.assertTrue(self.lap_calls(ev, 2))             # lap 2 already gets the full script
 
 
 class SchedulerPrecision(unittest.TestCase):
