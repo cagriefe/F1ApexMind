@@ -44,6 +44,17 @@ The dashboard lives at `localhost:8765` (see below). Stop with Ctrl+C in the ter
 
 The word is spoken only on the first call of each phase, numbers follow. Calls are timed by speed so each one ends just before its point, and they are spaced so they never overlap. If a call cannot be said on time it is skipped rather than said late, and the console tells you which one and why (`call not spoken: ... (reason)`), so gaps are never silent. While calls are on, the long after-the-fact sentences (`Braking 24 meters LATE`, `Apex ...`) stay text-only so they never talk over a call.
 
+## Track memory
+
+ApexMind remembers every circuit it has seen. Each finished lap (clean, invalid or untimed, including laps you flashed back out of) is merged into `~/.apexmind/tracks/<track id>.json`: the best laps per corner win, a weaker session never overwrites a better one, and files are replaced atomically. Next time you load that track (the race after practice, or two days later), you hear the calls from the first lap, with no learning laps.
+
+```
+apexmind memory                 # list remembered tracks, corners and best laps
+apexmind memory --forget 20     # forget one track (ids as in the game's telemetry)
+```
+
+A different layout of the same circuit (different track length) is never mixed in. Older `~/.apexmind/refs.json` files are still read.
+
 ## Web dashboard
 
 ApexMind ships a small web app (no build step, no dependencies) with two views:
@@ -79,7 +90,7 @@ Run `apexmind listen --help` for all of them.
 | `--voice`, `--voice-rate` | auto, 330 | macOS voice and speech rate (words per minute) |
 | `--lock-slip` | 0.25 | Lock-up threshold, wheel slip ratio |
 | `--record DIR` | off | Record the session |
-| `--refs FILE` | `~/.apexmind/refs.json` | Best-lap references per track, so calls work from lap 1 |
+| `--memory DIR` | `~/.apexmind` | Track memory: what is learned about each circuit, so calls work from lap 1 |
 | `--hotspots FILE` | `~/.apexmind/hotspots.json` | Where track limits were violated, per track |
 | `--llm on/off/auto` | auto | Rephrase advice with a local [Ollama](https://ollama.com) model (adds latency) |
 

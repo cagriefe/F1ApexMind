@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from dataclasses import dataclass, field
 from collections.abc import Callable
 
@@ -99,22 +100,33 @@ def merge_refs(exports: list[dict], radius_m: float = 60.0, keep: int = 3) -> di
             continue
         tl = ex.get("track_length")
         out["track_length"] = out["track_length"] or tl
+        known = list(out["zones"])          # corners are matched across exports, never within one
+        taken: set[int] = set()
         for zd in ex["zones"]:
             pts = [lap["sample"]["brake_lap"] for lap in zd["laps"] if "brake_lap" in lap["sample"]]
             pos = _circular_median(pts, tl)
             if pos is None:
                 continue
-            target = next(
-                (z for z in out["zones"]
-                 if abs(_signed_delta(pos, z["pos"], tl)) <= radius_m), None,
+            near = sorted(
+                (abs(_signed_delta(pos, z["pos"], tl)), idx) for idx, z in enumerate(known)
+                if idx not in taken and abs(_signed_delta(pos, z["pos"], tl)) <= radius_m
             )
-            if target is None:
+            if near:
+                taken.add(near[0][1])
+                target = known[near[0][1]]
+            else:
                 target = {"pos": pos, "laps": []}
                 out["zones"].append(target)
             target["laps"].extend(zd["laps"])
     for z in out["zones"]:
-        z["laps"].sort(key=lambda lap: lap["ms"])
-        del z["laps"][keep:]
+        seen: set[tuple] = set()
+        unique = []
+        for lap in sorted(z["laps"], key=lambda lap: (lap.get("rank", 0), lap["ms"])):
+            sig = (lap.get("rank", 0), round(lap["ms"], 3), round(lap["sample"].get("brake_lap", 0.0), 1))
+            if sig not in seen:                 # the same lap arrives again when a session re-saves
+                seen.add(sig)
+                unique.append(lap)
+        z["laps"] = unique[:keep]
         z.pop("pos", None)
     return out
 
@@ -300,6 +312,7 @@ class Analyzer:
         self._block_reason: dict[tuple[int, str], str] = {}
         self._jump_frames = 0            # frames left in which the position is not trustworthy
         self._cc_prev_dist: float | None = None
+        self._last_stamp = 0.0
         self._last_fired: tuple[str, float] | None = None
         self._epoch = 0
         self._prev: tuple[float | None, float, float, float] | None = None
@@ -478,9 +491,12 @@ class Analyzer:
         """Best (timed, valid) laps' references in a JSON-friendly form."""
         zones = []
         for z in self.zones:
-            ranked = [(k, s) for k, s in z.laps if k[0] == 0]
-            if ranked:
-                zones.append({"laps": [{"ms": k[1], "sample": _jsonable(s)} for k, s in ranked]})
+            # A corner is worth remembering when a valid lap went through it, or when it was seen in
+            # several laps (so a single spin cannot leave a phantom corner behind).
+            if any(k[0] < 2 for k, _s in z.laps) or len(z.laps) >= 2:
+                zones.append({"laps": [
+                    {"rank": k[0], "ms": k[1], "sample": _jsonable(s)} for k, s in z.laps
+                ]})
         return {"track_length": self.track_length, "zones": zones}
 
     def import_refs(self, data: dict | None) -> int:
@@ -499,7 +515,7 @@ class Analyzer:
                 for k in ("brake_world", "turnin_world", "throttle_world"):
                     if k in sample:
                         sample[k] = tuple(sample[k])
-                z.laps.append(((0, float(item["ms"])), sample))
+                z.laps.append(((int(item.get("rank", 0)), float(item["ms"])), sample))
             z.laps.sort(key=lambda e: e[0])
             del z.laps[self.ref_laps:]
             if z.laps:
@@ -557,6 +573,12 @@ class Analyzer:
         frac = (threshold - prev_v) / (cur - prev_v)
         return (pf[0] + frac * fwd) % tl
 
+    def _stamp(self) -> float:
+        """Strictly increasing wall-clock stamp: orders untimed laps across sessions (newest first)."""
+        now = max(time.time(), self._last_stamp + 1e-6)
+        self._last_stamp = now
+        return now
+
     def _commit_stage(self, lap_ms: int | None, valid: bool) -> None:
         stage, self.stage = self.stage, {}
         for zid, sample in stage.items():
@@ -566,19 +588,19 @@ class Analyzer:
             self._order += 1
             if not valid:
                 # Invalid lap: becomes a reference only if there is no valid lap at all (no phantom corners).
-                key = (2, -float(self._order))
+                key = (2, -self._stamp())
             elif lap_ms is None:
                 if z.laps:
                     self._gate_unranked(z, sample)
-                key = (1, -float(self._order))   # untimed lap: newest first
+                key = (1, -self._stamp())        # untimed lap: newest first
             else:
                 key = (0, float(lap_ms))
             z.laps.append((key, sample))
             z.laps.sort(key=lambda e: e[0])
             del z.laps[self.ref_laps:]
             self._rebuild_reference(z)
-        if stage and valid and lap_ms and self.on_commit:
-            self.on_commit()
+        if stage and self.on_commit:
+            self.on_commit()                     # every finished lap is remembered, not only the best
 
     def _rebuild_reference(self, z: _Zone) -> None:
         for name in self._FIELDS:

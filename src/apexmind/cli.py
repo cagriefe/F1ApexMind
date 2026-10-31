@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import logging.handlers
 import os
@@ -49,6 +48,7 @@ from .telemetry.packets import (
     parse_motion_ex,
     parse_session,
 )
+from .memory import TrackMemory, track_name
 from .recorder import Recorder
 from .webserver import LiveHub, start_server
 
@@ -198,8 +198,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="track-limit violation spots (persistent per track; 'Limits' warning from lap 1)",
     )
     ld.add_argument(
-        "--refs", default="~/.apexmind/refs.json", metavar="FILE",
-        help="best-lap references per track (across sessions): calls work from the first lap",
+        "--memory", default="~/.apexmind", metavar="DIR",
+        help="track memory: what is learned about each circuit is kept here, so calls work from the "
+             "first lap of any later session, race or another day (default ~/.apexmind)",
     )
     ld.add_argument(
         "--record", default="", metavar="DIR",
@@ -246,10 +247,37 @@ def build_parser() -> argparse.ArgumentParser:
     rp = sub.add_parser("replay", help="interpret a recorded CSV session offline (no audio)")
     rp.add_argument("rest", nargs=argparse.REMAINDER)
     rp.set_defaults(func=_cmd_replay)
+    mp = sub.add_parser("memory", help="list or forget what ApexMind remembers about tracks")
+    mp.add_argument("--dir", default="~/.apexmind", metavar="DIR", help="track memory directory")
+    mp.add_argument("--forget", type=int, metavar="TRACK_ID", help="forget one track")
+    mp.set_defaults(func=_cmd_memory)
     rr = sub.add_parser("report", help="analyse a recorded CSV session and print a JSON report")
     rr.add_argument("rest", nargs=argparse.REMAINDER)
     rr.set_defaults(func=_cmd_report)
     return p
+
+
+def _fmt_lap(ms: int | None) -> str:
+    if not ms:
+        return "-"
+    return f"{ms // 60000}:{(ms % 60000) / 1000:06.3f}"
+
+
+def _cmd_memory(args: argparse.Namespace) -> None:
+    mem = TrackMemory(args.dir)
+    if args.forget is not None:
+        done = mem.forget(args.forget)
+        print(f"Forgot track {args.forget}." if done else f"Track {args.forget} was not remembered.")
+        return
+    tracks = mem.tracks()
+    if not tracks:
+        print(f"Nothing remembered yet ({mem.root}). Drive a lap and ApexMind will remember the track.")
+        return
+    print(f"Track memory in {mem.root}:")
+    for t in tracks:
+        saved = time.strftime("%Y-%m-%d", time.localtime(t["saved_at"])) if t["saved_at"] else "imported"
+        print(f"  {t['name']} (id {t['track_id']}, {t['length']:.0f} m): {t['corners']} corners, "
+              f"best lap {_fmt_lap(t['best_ms'])}, saved {saved}")
 
 
 def _cmd_report(args: argparse.Namespace) -> None:
@@ -402,28 +430,23 @@ def _cmd_listen(args: argparse.Namespace) -> None:
     tyres = TyreCoach(speak_cb=advise)
     recorder = Recorder(args.record) if args.record else None
 
+    memory = TrackMemory(args.memory) if args.memory else None
+
     def load_refs() -> None:
-        if not args.refs or an.zones or st.session is None or not st.session.track_length:
+        if memory is None or an.zones or st.session is None or not st.session.track_length:
             return
-        try:
-            data = json.loads(Path(args.refs).expanduser().read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return
-        n = an.import_refs(data.get(str(st.session.track_id)))
+        data = memory.load(st.session.track_id, st.session.track_length)
+        n = an.import_refs(data)
         if n:
-            print(f"📚 {n} corner references loaded: calls work from the first lap", flush=True)
+            print(
+                f"📚 Track memory: {n} corners of {track_name(st.session.track_id)} remembered — "
+                "calls work from the first lap", flush=True,
+            )
 
     def save_refs() -> None:
-        if not args.refs or st.session is None:
+        if memory is None or st.session is None or not an.zones:
             return
-        p = Path(args.refs).expanduser()
-        try:
-            data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
-            data[str(st.session.track_id)] = an.export_refs()
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
-        except (OSError, ValueError):
-            _LOG.debug("could not save references", exc_info=True)
+        memory.save(st.session.track_id, an.export_refs())
 
     an = Analyzer(
         speak_cb=advise,
@@ -544,6 +567,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
             reset_learning("")
         elif code == "SEND":
             print("🏁 session ended", flush=True)
+            save_refs()
         elif code == "FLBK":
             reset_learning("⏪ flashback — corner knowledge kept", keep_corners=True)
         elif code == "CHQF":
@@ -824,6 +848,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
     try:
         lst.run()
     except KeyboardInterrupt:
+        save_refs()
         print("\n🏁 Done — summary:", flush=True)
         print(
             f"   packets: {lst.stats['received']} | errors: {lst.stats['errors']} | "

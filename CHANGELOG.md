@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.3
+- Track memory: every finished lap (clean, invalid or untimed) is merged into a per-track file, so calls work from lap 1 in a later race, restart or day. Before, only clean timed laps were saved, so practice with track-limit violations or flashbacks left nothing behind.
+- `apexmind memory` lists or forgets remembered tracks; `--refs FILE` became `--memory DIR`.
+- Corners braked close together (chicanes) are no longer merged into one when references are combined.
+
 ## 0.9.2
 - A flashback no longer wipes the corners learned so far (it used to, so drivers who flash back after every mistake never got a call).
 - Calls start after one reference lap instead of two.
