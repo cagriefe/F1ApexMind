@@ -1,6 +1,7 @@
 #!/bin/zsh
 # ApexMind launcher: double-click in Finder.
-# Listens for the game's UDP telemetry and speaks the calls. Recordings go to ./recordings.
+# Starts ApexMind and opens the web dashboard in your browser; this window keeps the log running.
+# It listens for the game's UDP telemetry and speaks the calls. Recordings go to ./recordings.
 cd "$(dirname "$0")" || exit 1
 export PYTHONPATH="src"
 
@@ -30,7 +31,7 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
-"$PY" -m apexmind listen --record "$PWD/recordings" --web "$@"
+"$PY" -m apexmind listen --record "$PWD/recordings" --open "$@"
 exit_code=$?
 # Keep the window open on errors so the message can be read.
 if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 130 ]; then

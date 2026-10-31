@@ -13,6 +13,7 @@ import signal
 import socket
 import sys
 import threading
+import webbrowser
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,6 +62,13 @@ _URGENT_KINDS = frozenset({"spin", "lockup", "wide", "lap_invalid"})
 # With pedal calls on, the after-the-fact sentences stay text-only (console, web, recording): they are
 # long and would talk over, or right behind, the calls the driver needs to hear.
 _TEXT_ONLY_WITH_CALLS = frozenset({"brake", "apex", "throttle"})
+
+
+def _open_later(url: str, delay_s: float = 0.8) -> None:
+    """Open the dashboard in the default browser shortly after the server is up."""
+    timer = threading.Timer(delay_s, webbrowser.open, args=(url,))
+    timer.daemon = True
+    timer.start()
 
 
 def _schedule(delay_s: float, fn) -> None:
@@ -223,6 +231,10 @@ def build_parser() -> argparse.ArgumentParser:
     ld.add_argument(
         "--web", nargs="?", const=8765, type=_port, default=None, metavar="PORT",
         help="serve the live web dashboard and recording analyzer on this port (default 8765)",
+    )
+    ld.add_argument(
+        "--open", action="store_true",
+        help="open the web dashboard in your browser when ApexMind starts (implies --web)",
     )
     ld.add_argument(
         "--web-host", default="localhost", metavar="HOST",
@@ -726,6 +738,8 @@ def _cmd_listen(args: argparse.Namespace) -> None:
         raise
 
     server = None
+    if args.open and not args.web:
+        args.web = 8765
     if args.web:
         hub = LiveHub()
         try:
@@ -761,6 +775,8 @@ def _cmd_listen(args: argparse.Namespace) -> None:
         shown = ip if wildcard else args.web_host
         scheme = "ht" + "tp"
         print(f"🌐 Web dashboard: {scheme}://{shown}:{args.web}", flush=True)
+        if args.open:
+            _open_later(f"{scheme}://{'localhost' if wildcard else shown}:{args.web}")
     print(f"🏁 ApexMind {__version__} — listening on udp/{args.port}", flush=True)
     print(
         f"   F1 25/26: Options → Telemetry Settings → UDP Telemetry: ON | "

@@ -22,11 +22,11 @@ You need Python 3.10 or newer and a game that can send UDP telemetry (F1 22 to F
    - UDP Send Rate: **60 Hz** (20 Hz works, 60 Hz is more precise)
    - UDP Format: **2025** (or 2026 for the Season Pack)
 2. Start ApexMind
-   - macOS: double-click `start.command`
-   - anywhere: `PYTHONPATH=src python3 -m apexmind listen --web` (or `pip install -e .` and run `apexmind listen --web`)
+   - macOS: double-click `start.command`. It starts the coach, opens the web dashboard in your browser, and keeps this window open for the log (leave it in the background)
+   - anywhere: `PYTHONPATH=src python3 -m apexmind listen --open` (or `pip install -e .` and run `apexmind listen --open`); `--web` serves the dashboard without opening a browser
 3. Drive. The first laps are used for learning; calls start once a corner has been seen on two valid laps. Best laps are remembered between sessions, so on a known track the calls work from the first lap.
 
-Open `localhost:8765` in a browser for the web dashboard (see below). Stop with Ctrl+C.
+The dashboard lives at `localhost:8765` (see below). Stop with Ctrl+C in the terminal window.
 
 ## What you hear
 
@@ -62,7 +62,7 @@ apexmind replay a.csv --scripts            # the learned corner scripts
 apexmind report a.csv -o report.json       # the JSON the web UI shows
 ```
 
-`start.command` records automatically into `./recordings` (git-ignored). Use `tools/share-recordings.sh` to push recordings to a separate branch, for example to attach them to a bug report.
+`start.command` records automatically into `./recordings` (git-ignored). Use `tools/share-recordings.sh` to push recordings to a separate branch, for example to attach them to a bug report (recordings contain only driving telemetry, but the branch is as public as the repository).
 
 ## Useful options
 
@@ -73,6 +73,7 @@ Run `apexmind listen --help` for all of them.
 | `--port` | 20777 | UDP port to listen on |
 | `--mute` | off | No audio, console output only |
 | `--web [PORT]` | off | Serve the dashboard (8765 if no port is given) |
+| `--open` | off | Also open the dashboard in your browser (implies `--web`) |
 | `--calls on/off` | on | Graded pedal calls |
 | `--cue-latency` | auto | Beep/voice latency compensation: `auto` measures `afplay` at start-up, or give seconds |
 | `--voice`, `--voice-rate` | auto, 330 | macOS voice and speech rate (words per minute) |
