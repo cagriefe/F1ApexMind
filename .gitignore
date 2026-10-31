@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+_site/
+.DS_Store
+.env
+*.log
+.pytest_cache/
+.ruff_cache/
+
+# your own recordings stay local; share them with tools/share-recordings.sh
+recordings/
+logs/
+data/

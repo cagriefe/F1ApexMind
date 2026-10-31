@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="description" content="ApexMind: a real-time AI race engineer for F1 games. Analyse a recorded session in your browser.">
+<title>ApexMind</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ff6a2b'/%3E%3Cpath d='M8 23 16 8l8 15h-5l-3-6-3 6z' fill='%230c0d0f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="#analyze" aria-label="ApexMind home"><span class="brand-mark" aria-hidden="true"></span>ApexMind</a>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" id="tab-analyze" aria-controls="view-analyze" aria-selected="true" data-view="analyze">Analyze</button>
+      <button role="tab" id="tab-live" aria-controls="view-live" aria-selected="false" data-view="live" hidden>Live</button>
+    </nav>
+    <a class="ghost-link" href="https://github.com/cagriefe/F1ApexMind" rel="noopener">GitHub</a>
+  </div>
+</header>
+
+<main>
+  <section id="view-analyze" role="tabpanel" aria-labelledby="tab-analyze">
+    <div id="intro" class="intro">
+      <h1>Understand every corner of your session.</h1>
+      <p class="lead">Drop a recording from <code>apexmind listen --record</code>. ApexMind replays the whole coach over it and shows your laps, braking points, call scripts, lock-ups and track-limit spots.</p>
+      <div id="drop" class="drop" tabindex="0" role="button" aria-label="Choose a session CSV file">
+        <div class="drop-title">Drop a session <span class="mono">.csv</span> here</div>
+        <div class="drop-sub">or</div>
+        <div class="row">
+          <label class="btn primary" for="file">Choose file</label>
+          <button class="btn" id="sample" type="button">Try the sample session</button>
+        </div>
+        <input id="file" type="file" accept=".csv,text/csv" hidden>
+        <p class="fine">Analysis runs entirely in your browser. Your recording is never uploaded.</p>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite" hidden></p>
+    </div>
+
+    <div id="results" hidden></div>
+  </section>
+
+  <section id="view-live" role="tabpanel" aria-labelledby="tab-live" hidden>
+    <div class="live-head">
+      <span id="live-chip" class="chip">Waiting for telemetry</span>
+      <span id="live-track" class="muted"></span>
+    </div>
+    <div class="live-grid">
+      <div class="panel call-panel" aria-live="polite">
+        <div class="panel-label">Last call</div>
+        <div id="live-call" class="call">&mdash;</div>
+        <div id="live-call-meta" class="muted"></div>
+      </div>
+      <div class="panel speed-panel">
+        <div class="panel-label">Speed</div>
+        <div class="speed"><span id="live-speed">0</span><small>km/h</small></div>
+        <div class="gear-row"><span class="gear" id="live-gear">N</span><span class="muted" id="live-rpm"></span></div>
+      </div>
+      <div class="panel pedals-panel">
+        <div class="panel-label">Pedals</div>
+        <div class="pedals">
+          <div class="bar"><div class="fill thr" id="live-thr"></div><span>Throttle</span><b id="live-thr-v">0</b></div>
+          <div class="bar"><div class="fill brk" id="live-brk"></div><span>Brake</span><b id="live-brk-v">0</b></div>
+        </div>
+        <div class="steer"><div class="steer-track"><div class="steer-dot" id="live-steer"></div></div><span class="muted">Steering</span></div>
+      </div>
+      <div class="panel lap-panel">
+        <div class="panel-label">Lap</div>
+        <div class="lap-line"><span class="muted">Lap</span> <b id="live-lap">&ndash;</b> <span class="muted">Sector</span> <b id="live-sector">&ndash;</b></div>
+        <div class="lap-time mono" id="live-laptime">0:00.000</div>
+        <div class="lap-line"><span class="muted">Last</span> <b class="mono" id="live-last">&ndash;</b></div>
+        <div id="live-flags" class="flags"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-label">Recent calls</div>
+      <ol id="live-log" class="log"></ol>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>ApexMind is free software under the <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener">GNU AGPL-3.0</a>.</span>
+  <span id="live-hint" class="muted">Live view: run <code>apexmind listen --web</code> on the machine that receives the game's telemetry.</span>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>

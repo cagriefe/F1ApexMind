@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apexmind"
+version = "0.9.0"
+description = "A real-time AI race engineer for F1 games: listens to UDP telemetry and coaches braking and throttle corner by corner."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "ApexMind contributors" }]
+keywords = ["f1", "telemetry", "udp", "race engineer", "sim racing", "coaching"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Topic :: Games/Entertainment",
+]
+# The core runs on the standard library; the optional LLM polish talks to Ollama with urllib.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/cagriefe/F1ApexMind"
+Issues = "https://github.com/cagriefe/F1ApexMind/issues"
+
+[project.scripts]
+apexmind = "apexmind.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+apexmind = ["webui/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
