@@ -21,8 +21,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/cagriefe/F1ApexMind"
-Issues = "https://github.com/cagriefe/F1ApexMind/issues"
+Homepage = "https://github.com/cagriefe/apexmind-f1-coach"
+Issues = "https://github.com/cagriefe/apexmind-f1-coach/issues"
 
 [project.scripts]
 apexmind = "apexmind.cli:main"
